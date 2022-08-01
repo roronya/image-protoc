@@ -1,0 +1,50 @@
+version: '3'
+
+env:
+    DOCKER_IMAGE: proto
+
+tasks:
+    docker-image-build:
+        cmds:
+            - docker image build -t ${DOCKER_IMAGE} .
+
+    docker-image-build-debug:
+        cmds:
+            - >
+                docker container run
+                --mount type=bind,src=$(pwd),dst=/proto
+                --mount type=bind,src=$(pwd)/../doc,dst=/doc
+                --mount type=bind,src=$(pwd)/../src,dst=/src
+                -it --entrypoint /bin/bash ${DOCKER_IMAGE}
+
+    protoc:
+        cmds:
+            - >
+                docker container run
+                --mount type=bind,src=$(pwd)/..,dst=/app
+                ${DOCKER_IMAGE}
+
+    protoc-build:
+        env:
+            PROTO_FILES:
+                sh: find ./ -maxdepth 1 -name *.proto
+
+        cmds:
+            - >
+                docker container run
+                --mount type=bind,src=$(pwd),dst=/proto
+                --mount type=bind,src=$(pwd)/../doc,dst=/doc
+                --mount type=bind,src=$(pwd)/../src,dst=/src
+                ${DOCKER_IMAGE}
+                -I ./ -I ./thirdparty/googleapis
+                --java_out=/src/main/kotlin --kotlin_out=/src/main/kotlin
+                --doc_out=/doc --doc_opt=markdown,index.md
+                ${PROTO_FILES}
+
+    # 追加したいパッケージは下に追記する
+    ## protoファイルをコンパイルするときに-Iオプションでパスを通すことで使えるようになる
+    ## 例: protoc -I ./ -I ./thirdparty/googleapis/googleapis *.proto
+    fetch-thirdparty:
+        cmds:
+            - rm -rf thirdparty/*
+            - git clone https://github.com/googleapis/googleapis thirdparty/googleapis
